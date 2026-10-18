@@ -452,20 +452,60 @@ async function persistNow(){clearTimeout(persistT);if(!dirtyCols.size||!STORE.ki
   catch(e){console.warn('save failed',e);cols.forEach(c=>dirtyCols.add(c));toast('Could not save on this device. Free up some space and try again.','bad')}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistNow()});
 window.addEventListener('pagehide',()=>persistNow());
+function stamp(col,patch){const now=Date.now();
+  if(col==='days'){for(const p of Object.values(patch.days||{})){if(!isObj(p))continue;const t={};for(const k of Object.keys(p)){if(k==='_t')continue;if(isObj(p[k]))for(const sk of Object.keys(p[k]))t[k+'.'+sk]=now;else t[k]=now}p._t=t}}
+  else if(col==='money'||col==='sessions'){for(const v of Object.values(patch.items||{}))if(isObj(v))v._t=now}
+  else patch._t=now;
+  return patch}
 function write(path,patch,{render:doRender=true}={}){
   const i=path.indexOf('/'),col=path.slice(0,i),id=path.slice(i+1);
-  DB.cache[col][id]=mergeDeep(DB.cache[col][id]||{},patch);
+  DB.cache[col][id]=mergeDeep(DB.cache[col][id]||{},stamp(col,patch));
   rebuild(col);schedulePersist(col);if(doRender)render();
 }
 function saveMeta(){if(STORE.kind)storeSet('meta',S.meta).catch(()=>{})}
-function importData(o){
+function incomingCache(o){
+  if(isObj(o.cache)){const c=clone(o.cache);COLS.forEach(k=>{if(!isObj(c[k]))c[k]={}});return c}
   const c=Object.fromEntries(COLS.map(k=>[k,{}]));
   for(const [d,v] of Object.entries(o.days||{})){if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!v)continue;const m=d.slice(0,7);(c.days[m]||(c.days[m]={days:{}})).days[d]=v}
   for(const col of ['money','sessions'])for(const [id,v] of Object.entries(o[col]||{})){if(!v||!v.date)continue;const {id:_x,...rest}=v;const m=v.date.slice(0,7);(c[col][m]||(c[col][m]={items:{}})).items[id]=rest}
   for(const col of ['students','classes','team','tasks'])for(const [id,v] of Object.entries(o[col]||{})){if(!v)continue;const {id:_x,...rest}=v;c[col][id]=rest}
   if(o.settings&&typeof o.settings==='object')c.settings.main=o.settings;
-  DB.cache=c;COLS.forEach(rebuild);COLS.forEach(schedulePersist);persistNow();render();
+  return c;
 }
+function importData(o){DB.cache=incomingCache(o);COLS.forEach(rebuild);COLS.forEach(schedulePersist);persistNow();render()}
+/* merge: keep everything from both devices; when the same thing changed on both, the newer change wins */
+const same=(x,y)=>JSON.stringify(x)===JSON.stringify(y);
+const recT=r=>Math.max(+(r&&r._t)||0,+(r&&r.updatedAt)||0);
+function pickRec(x,y,cnt){if(y===undefined||y===null)return x;if(x===undefined||x===null){if(!y.deleted)cnt.n++;return clone(y)}
+  if(recT(y)>recT(x)){if(!same(x,y))cnt.n++;return clone(y)}return x}
+function tOf(day,k,sk){const t=(day&&day._t)||{};return (sk!=null&&t[k+'.'+sk])||t[k]||0}
+function mergeDay(a,b){let ch=false;const out={},t={...(a._t||{})};
+  for(const [k,v] of Object.entries(b._t||{}))if(!(t[k]>=v))t[k]=v;
+  const keys=new Set([...Object.keys(a),...Object.keys(b)]);keys.delete('_t');
+  for(const k of keys){const x=a[k],y=b[k];
+    if(y===undefined){out[k]=x;continue}
+    if(x===undefined){out[k]=clone(y);ch=true;continue}
+    if(isObj(x)&&isObj(y)){const o={};for(const sk of new Set([...Object.keys(x),...Object.keys(y)])){const xs=x[sk],ys=y[sk];
+        if(ys===undefined)o[sk]=xs;
+        else if(xs===undefined){o[sk]=clone(ys);ch=true}
+        else if(tOf(b,k,sk)>tOf(a,k,sk)){o[sk]=clone(ys);if(!same(xs,ys))ch=true}
+        else o[sk]=xs}
+      out[k]=o}
+    else if(tOf(b,k)>tOf(a,k)){out[k]=clone(y);if(!same(x,y))ch=true}
+    else out[k]=x}
+  out._t=t;return {day:out,ch}}
+function mergeData(o){const I=incomingCache(o),L=DB.cache,c={},cnt={};
+  for(const col of COLS){c[col]={};const n=cnt[col]={n:0};const A=L[col]||{},B=I[col]||{};
+    for(const id of new Set([...Object.keys(A),...Object.keys(B)])){const a=A[id],b=B[id];
+      if(col==='days'){if(!b){c[col][id]=a;continue}const ad=(a&&a.days)||{},bd=b.days||{},days={};
+        for(const d of new Set([...Object.keys(ad),...Object.keys(bd)])){const x=ad[d],y=bd[d];
+          if(!isObj(y))days[d]=x;else if(!isObj(x)){days[d]=clone(y);n.n++}else{const r=mergeDay(x,y);days[d]=r.day;if(r.ch)n.n++}}
+        c[col][id]={...(a||{}),days}}
+      else if(col==='money'||col==='sessions'){if(!b){c[col][id]=a;continue}const ai=(a&&a.items)||{},bi=b.items||{},items={};
+        for(const k of new Set([...Object.keys(ai),...Object.keys(bi)]))items[k]=pickRec(ai[k],bi[k],n);
+        c[col][id]={...(a||{}),items}}
+      else c[col][id]=pickRec(a,b,n)}}
+  DB.cache=c;COLS.forEach(rebuild);COLS.forEach(schedulePersist);persistNow();render();return cnt}
 const dayPath=d=>`days/${d.slice(0,7)}`;
 const setDay=(d,patch,opt)=>write(dayPath(d),{days:{[d]:patch}},opt);
 const saveDoc=(col,id,data,opt={})=>write(`${col}/${id}`,data,{debounce:0,...opt});
@@ -990,7 +1030,7 @@ SHEETS.settings=dr=>{const g=dr.goals||{},c=dr.cats||{};
    <label class="fld"><span>Pastel expenses</span><input class="in" id="c-pout" name="c.pout" value="${esc(c.pout||'')}"></label>
    <label class="fld"><span>Personal income</span><input class="in" id="c-min" name="c.min" value="${esc(c.min||'')}"></label>
    <label class="fld"><span>Personal expenses</span><input class="in" id="c-mout" name="c.mout" value="${esc(c.mout||'')}"></label></div>
-  <div class="fld"><span>Backup</span><div class="btn-row" style="margin-top:0"><button type="button" class="btn sm primary" data-act="export" data-k="json">Back up now</button><label class="btn sm" for="s-restore">Restore from a backup</label><input type="file" id="s-restore" data-f="restore" accept="application/json,.json" style="position:absolute;width:1px;height:1px;opacity:0"></div><small class="hint">Daybook keeps everything on this device only, so it works without internet. Back up once a week and keep the file somewhere safe, like your Telegram Saved Messages. ${S.meta.lastBackup?'Last backup: '+esc(shortDate(S.meta.lastBackup))+'.':'No backup yet.'} To bring over entries from the Claude version, make a Full backup there and restore it here.</small></div>
+  <div class="fld"><span>Backup</span><div class="btn-row" style="margin-top:0"><button type="button" class="btn sm primary" data-act="export" data-k="json">Back up now</button><label class="btn sm" for="s-restore">Merge or restore a backup</label><input type="file" id="s-restore" data-f="restore" accept="application/json,.json" style="position:absolute;width:1px;height:1px;opacity:0"></div><small class="hint">Daybook keeps everything on this device only, so it works without internet. Back up once a week and keep the file somewhere safe, like your Telegram Saved Messages. ${S.meta.lastBackup?'Last backup: '+esc(shortDate(S.meta.lastBackup))+'.':'No backup yet.'} To combine your phone and computer, back up on one and choose Merge on the other. Do the same the other way round if you want both to have everything.</small></div>
   <div class="fld"><span>Export for spreadsheets</span><div class="btn-row" style="margin-top:0"><button type="button" class="btn sm" data-act="export" data-k="daily">Daily log (CSV)</button><button type="button" class="btn sm" data-act="export" data-k="money">Money (CSV)</button><button type="button" class="btn sm" data-act="export" data-k="sessions">Sessions (CSV)</button></div></div>
   <button type="button" class="link" data-act="showWelcome" style="align-self:flex-start">Show the welcome tips again</button>
   ${foot('','Save settings')}</form>`};
@@ -1127,7 +1167,7 @@ ACT.export=async ds=>{let name,data;const k=ds.k;
     ...Object.keys(S.days).sort().map(d=>{const x=dayOf(d),sm=sleepMins(x),t3=x.top3||{};return [d,jd(d),x.sleep&&x.sleep.bed,x.sleep&&x.sleep.wake,sm==null?'':(sm/60).toFixed(2),...LANGS.map(l=>studyOf(x,l.k)),studyTotal(x),readMin(x),x.read&&x.read.pages,x.read&&x.read.book,x.review&&x.review.min,x.review&&x.review.mood,x.review&&x.review.energy,...hs.map(h=>x.habits&&x.habits[h]?1:0),[1,2,3].filter(i=>t3[i]&&t3[i].done).length,x.review&&x.review.note]})])}
   else if(k==='money'){name='daybook-money.csv';data=csv([['date','persian_date','type','amount_toman','area','category','note','student','sessions','paid_to'],...Object.values(S.money).sort((a,b)=>a.date.localeCompare(b.date)).map(m=>[m.date,jd(m.date),m.type==='in'?'income':'expense',m.amount,m.area,m.cat,m.note,m.studentId?studentName(m.studentId):'',m.sessions||'',m.teamId?teamName(m.teamId):''])])}
   else if(k==='sessions'){name='daybook-sessions.csv';data=csv([['date','persian_date','class','teacher','status','minutes','students','absent','caused_by','reason','makeup_date','note'],...Object.values(S.sessions).sort((a,b)=>a.date.localeCompare(b.date)).map(s=>[s.date,jd(s.date),className(s.classId),teamName(s.teacherId),s.status,s.minutes,(s.roster||[]).map(studentName).join('; '),(s.absent||[]).map(studentName).join('; '),s.cause,s.reason,s.makeup,s.note])])}
-  else{name=`daybook-backup-${todayISO()}.json`;data=JSON.stringify({app:'daybook',version:1,exported:new Date().toISOString(),settings:S.settings,days:S.days,money:S.money,sessions:S.sessions,students:S.students,classes:S.classes,team:S.team,tasks:S.tasks},null,2)}
+  else{name=`daybook-backup-${todayISO()}.json`;data=JSON.stringify({app:'daybook',version:2,exported:new Date().toISOString(),settings:S.settings,days:S.days,money:S.money,sessions:S.sessions,students:S.students,classes:S.classes,team:S.team,tasks:S.tasks,cache:DB.cache},null,1)}
   const ok=await shareFile(name,data,k==='json'?'application/json':'text/csv');
   if(ok&&k==='json'){S.meta.lastBackup=todayISO();saveMeta();if(S.sheet&&S.sheet.kind==='settings')renderSheet();render();toast('Backup ready. Keep the file somewhere safe.')}
 };
@@ -1144,10 +1184,16 @@ function readRestore(file){if(!file)return;const r=new FileReader();
     if(!o||typeof o!=='object'||!(o.days||o.money||o.settings||o.team)){toast('That file is not a Daybook backup.','bad');return}
     const n=k=>Object.keys(o[k]||{}).length;S.back=null;openSheet('import',{data:o,when:o.exported||'',n:{days:n('days'),money:n('money'),sessions:n('sessions'),students:n('students'),team:n('team'),tasks:n('tasks')}})};
   r.onerror=()=>toast('Could not read that file.','bad');r.readAsText(file)}
-SHEETS.import=dr=>`${head('Restore a backup')}<p style="margin:0">This replaces everything in Daybook on this device with the backup${dr.when?' from '+esc(new Date(dr.when).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})):''}.</p>
+SHEETS.import=dr=>`${head('Bring in a backup')}<p style="margin:0">Backup${dr.when?' from '+esc(new Date(dr.when).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})):''}:</p>
   <div class="mini-tiles" style="margin-top:12px">${[['Days',dr.n.days],['Money',dr.n.money],['Sessions',dr.n.sessions],['Students',dr.n.students],['Team',dr.n.team],['Tasks',dr.n.tasks]].map(([k,v])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>
-  <div class="sh-foot"><span class="spacer"></span><button type="button" class="btn" data-act="closeSheet">Cancel</button><button type="button" class="btn primary" data-act="doImport">Replace with backup</button></div>`;
-ACT.doImport=()=>{const dr=S.sheet&&S.sheet.draft;if(!dr||!dr.data)return;importData(dr.data);closeSheet();toast('Backup restored')};
+  <p class="hint" style="margin:14px 0 0"><b>Merge</b> adds everything new from the backup and keeps everything already on this device. If the same entry was changed in both places, the newer change wins.<br><b>Replace</b> wipes this device and makes it an exact copy of the backup.</p>
+  <div class="sh-foot"><button type="button" class="btn" data-act="doImport">Replace</button><span class="spacer"></span><button type="button" class="btn" data-act="closeSheet">Cancel</button><button type="button" class="btn primary" data-act="doMerge">Merge</button></div>`;
+ACT.doImport=(ds,el)=>{const dr=S.sheet&&S.sheet.draft;if(!dr||!dr.data)return;
+  if(el&&!el.hasAttribute('data-armed')){el.setAttribute('data-armed','');el.textContent='Tap again to replace';setTimeout(()=>{if(el.isConnected){el.removeAttribute('data-armed');el.textContent='Replace'}},4000);return}
+  importData(dr.data);closeSheet();toast('Backup restored')};
+ACT.doMerge=()=>{const dr=S.sheet&&S.sheet.draft;if(!dr||!dr.data)return;const c=mergeData(dr.data);closeSheet();
+  const parts=[['days','day'],['money','money entry','money entries'],['sessions','session'],['students','student'],['classes','class','classes'],['team','team member'],['tasks','task']].filter(([k])=>c[k].n).map(([k,one,many])=>c[k].n+' '+(c[k].n===1?one:(many||one+'s')));
+  toast(parts.length?'Merged: '+parts.join(', '):'Already up to date. Nothing new in that backup.')};
 
 /* ---------------- toast ---------------- */
 let toastT=null;
