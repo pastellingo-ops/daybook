@@ -1,5 +1,5 @@
 /* Daybook offline cache. Bump VERSION when any file changes so phones pick up the update. */
-const VERSION = 'daybook-v4';
+const VERSION = 'daybook-v5';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', event => {
