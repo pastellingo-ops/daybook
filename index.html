@@ -374,6 +374,7 @@ details>summary{list-style:none;cursor:pointer} details>summary::-webkit-details
 .capbox{display:flex;flex-direction:column;gap:10px;margin:0 0 14px;padding-bottom:14px;border-bottom:1px solid var(--line)}
 .result.bad{background:var(--bad-soft)}
 .inbox-card{margin-bottom:14px}
+.syncstat b{font:650 17px var(--f-body,inherit)}
 </style>
 </head>
 <body>
@@ -669,7 +670,7 @@ function alerts(scope='all'){
     else if(k.remaining<=1)out.push({kind:'warn',text:`${st.name}: ${k.remaining} paid session${k.remaining===1?'':'s'} left`,act:'student',args:{id:st.id},cta:'Open'})}
   if(life){const ns=Object.values(S.money).filter(m=>txLines(m).some(needsSort)).length;if(ns)out.push({kind:'warn',text:`${ns} transaction${ns>1?'s':''} to sort in Finance`,act:'finSort',cta:'Sort'})}
   if(life&&S.fin&&typeof finAlerts==='function')out.push(...finAlerts());
-  if(life)out.push(...inboxAlerts());
+  if(life)out.push(...inboxAlerts(),...syncAlerts());
   const open=Object.values(S.tasks).filter(x=>x.status!=='done'&&x.due);
   const over=open.filter(x=>x.due<t&&(scope!=='pastel'||x.area==='Pastel')),due=open.filter(x=>x.due===t&&(scope!=='pastel'||x.area==='Pastel'));
   if(over.length)out.push({kind:'bad',text:`${over.length} overdue task${over.length>1?'s':''}`,act:'gotoTasks',args:{v:'overdue'},cta:'Show'});
@@ -1071,7 +1072,7 @@ SHEETS.settings=dr=>{const g=dr.goals||{},c=dr.cats||{};
    <label class="fld"><span>Pastel expenses</span><input class="in" id="c-pout" name="c.pout" value="${esc(c.pout||'')}"></label>
    <label class="fld"><span>Personal income</span><input class="in" id="c-min" name="c.min" value="${esc(c.min||'')}"></label>
    <label class="fld"><span>Personal expenses</span><input class="in" id="c-mout" name="c.mout" value="${esc(c.mout||'')}"></label></div>
-  <div class="fld"><span>Backup</span><div class="btn-row" style="margin-top:0"><button type="button" class="btn sm primary" data-act="export" data-k="json">Back up now</button><label class="btn sm" for="s-restore">Merge or restore a backup</label><input type="file" id="s-restore" data-f="restore" accept="application/json,.json" style="position:absolute;width:1px;height:1px;opacity:0"><label class="btn sm" for="s-check">Check a backup</label><input type="file" id="s-check" data-f="checkbk" accept="application/json,.json" style="position:absolute;width:1px;height:1px;opacity:0"></div><div class="btn-row"><button type="button" class="btn sm ${S.meta.bkPass?'on':''}" data-act="bkPass">${S.meta.bkPass?'Backups protected':'Protect backups'}</button><button type="button" class="btn sm" data-act="snaps">Safety copies</button><button type="button" class="btn sm" data-act="trash">Recently deleted</button></div><small class="hint">Daybook keeps everything on this device only, so it works without internet. Back up once a week and keep the file somewhere safe, like your Telegram Saved Messages. ${S.meta.lastBackup?'Last backup: '+esc(shortDate(S.meta.lastBackup))+'.':'No backup yet.'} To combine your phone and computer, back up on one and choose Merge on the other. Do the same the other way round if you want both to have everything.</small></div>
+  <div class="fld"><span>Backup</span><div class="btn-row" style="margin-top:0"><button type="button" class="btn sm primary" data-act="export" data-k="json">Back up now</button><label class="btn sm" for="s-restore">Merge or restore a backup</label><input type="file" id="s-restore" data-f="restore" accept="application/json,.json" style="position:absolute;width:1px;height:1px;opacity:0"><label class="btn sm" for="s-check">Check a backup</label><input type="file" id="s-check" data-f="checkbk" accept="application/json,.json" style="position:absolute;width:1px;height:1px;opacity:0"></div><div class="btn-row"><button type="button" class="btn sm ${S.meta.bkPass?'on':''}" data-act="bkPass">${S.meta.bkPass?'Backups protected':'Protect backups'}</button><button type="button" class="btn sm" data-act="snaps">Safety copies</button><button type="button" class="btn sm" data-act="trash">Recently deleted</button>${syncBtn()}</div><small class="hint">Daybook keeps everything on this device only, so it works without internet. Back up once a week and keep the file somewhere safe, like your Telegram Saved Messages. ${S.meta.lastBackup?'Last backup: '+esc(shortDate(S.meta.lastBackup))+'.':'No backup yet.'} To combine your phone and computer, back up on one and choose Merge on the other. Do the same the other way round if you want both to have everything.</small></div>
   <div class="fld"><span>Export for spreadsheets</span><div class="btn-row" style="margin-top:0"><button type="button" class="btn sm" data-act="export" data-k="daily">Daily log (CSV)</button><button type="button" class="btn sm" data-act="export" data-k="fintx">Transactions (CSV)</button><button type="button" class="btn sm" data-act="export" data-k="sessions">Sessions (CSV)</button></div></div>
   <button type="button" class="link" data-act="showWelcome" style="align-self:flex-start">Show the welcome tips again</button>
   ${foot('','Save settings')}</form>`};
@@ -2214,13 +2215,31 @@ const CEO_SEED=[
   ['Retention and referrals','Grow by keeping students longer and earning referrals.','Why can retention matter more than acquisition?','Keeping a student costs less than finding a new one, and satisfied students bring referrals; small retention gains compound revenue.','Measure how many students renewed last term.'],
   ['Growth experiments','Test small changes with a clear hypothesis and measure them.','What does a good growth experiment define before it starts?','A hypothesis, the change, the metric, the time frame and what result would count as success.','Run one small experiment for Pastel this month.']]]];
 const CEO_RES=[['Profit First','Mike Michalowicz','Financial Management'],['High Output Management','Andrew S. Grove','Operations Management'],['The Effective Executive','Peter F. Drucker','Time Management'],['Radical Candor','Kim Scott','Leadership'],['Who: The A Method for Hiring','Geoff Smart & Randy Street','Human Resource Management'],['The Fearless Organization','Amy C. Edmondson','Organisational Psychology'],['Thinking in Bets','Annie Duke','Decision-Making'],['Good Strategy Bad Strategy','Richard Rumelt','Business Strategy'],['Traction','Gabriel Weinberg & Justin Mares','Business Growth']];
-function learnSeed(){if(LP().seeded||Object.keys(S.lpaths).length)return;
-  const ceo=uid();saveDoc('lpaths',ceo,{title:'CEO Academy',goal:'Run Pastel with the skills of a CEO: money, time, people and growth.',status:'Active',priority:1,target:null,deleted:false,createdAt:Date.now(),updatedAt:Date.now()},{render:false});
-  [['Learning Science','Second language acquisition, cognitive psychology and learning design.'],['English Development','Advanced English, IELTS and TOEFL.'],['Spanish & German','Study and review of Spanish and German.']].forEach(([t,g],i)=>saveDoc('lpaths',uid(),{title:t,goal:g,status:'Paused',priority:i+2,deleted:false,createdAt:Date.now(),updatedAt:Date.now()},{render:false}));
-  const byMod={};CEO_SEED.forEach(([mod,ts],mi)=>{let prev=null;ts.forEach(([title,objective,q,a,task],ti)=>{const id=uid();(byMod[mod]||(byMod[mod]=[])).push(id);
-    saveDoc('ltopics',id,{pathId:ceo,module:mod,mOrder:mi+1,order:ti+1,title,objective,q,a,minutes:25,prereqs:prev?[prev]:[],app:{task,status:'Not started',note:''},status:'new',rev:null,deleted:false,createdAt:Date.now(),updatedAt:Date.now()},{render:false});prev=id})});
-  CEO_RES.forEach(([title,author,mod])=>saveDoc('lres',uid(),{title,author,type:'Book',status:'To read',topicIds:byMod[mod]||[],suggested:true,notes:'Suggested starting point. Replace with your own sources.',deleted:false,createdAt:Date.now(),updatedAt:Date.now()},{render:false}));
+/* seeded items get fixed ids, so two devices that each seeded on their own end up with the same records after a sync */
+const SEED_PATHS=[['CEO Academy','Run Pastel with the skills of a CEO: money, time, people and growth.','Active'],['Learning Science','Second language acquisition, cognitive psychology and learning design.','Paused'],['English Development','Advanced English, IELTS and TOEFL.','Paused'],['Spanish & German','Study and review of Spanish and German.','Paused']];
+const seedSlug=t=>String(t).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+function learnSeed(){if(LP().seeded||Object.keys(S.lpaths).length)return;const now=Date.now();
+  SEED_PATHS.forEach(([title,goal,status],i)=>saveDoc('lpaths','seed-p-'+seedSlug(title),{title,goal,status,priority:i+1,target:null,seedKey:'p:'+title,deleted:false,createdAt:now,updatedAt:now},{render:false}));
+  const ceo='seed-p-'+seedSlug('CEO Academy'),byMod={};
+  CEO_SEED.forEach(([mod,ts],mi)=>{let prev=null;ts.forEach(([title,objective,q,a,task],ti)=>{const id=`seed-t-${mi+1}-${ti+1}`;(byMod[mod]||(byMod[mod]=[])).push(id);
+    saveDoc('ltopics',id,{pathId:ceo,module:mod,mOrder:mi+1,order:ti+1,title,objective,q,a,minutes:25,prereqs:prev?[prev]:[],app:{task,status:'Not started',note:''},status:'new',rev:null,seedKey:'t:'+title,deleted:false,createdAt:now,updatedAt:now},{render:false});prev=id})});
+  CEO_RES.forEach(([title,author,mod],i)=>saveDoc('lres','seed-r-'+(i+1),{title,author,type:'Book',status:'To read',topicIds:byMod[mod]||[],suggested:true,seedKey:'r:'+title,notes:'Suggested starting point. Replace with your own sources.',deleted:false,createdAt:now,updatedAt:now},{render:false}));
   saveDoc('settings','learn',{seeded:true},{render:false})}
+/* if both devices seeded before syncing, keep one copy of each seeded item (the one you've used), move every link onto it and put the spare in Recently deleted */
+function seedDedupe(){const live=o=>Object.values(o).filter(x=>x&&!x.deleted);let changed=0;const pt=Object.fromEntries(Object.values(S.lpaths).filter(Boolean).map(p=>[p.id,p.title]));
+  const pTitles=new Set(SEED_PATHS.map(x=>x[0])),tTitles=new Set(CEO_SEED.flatMap(([,ts])=>ts.map(t=>t[0]))),rTitles=new Set(CEO_RES.map(x=>x[0]));
+  const key=(col,x)=>x.seedKey||(col==='lpaths'&&pTitles.has(x.title)?'p:'+x.title:col==='ltopics'&&tTitles.has(x.title)&&pt[x.pathId]==='CEO Academy'?'t:'+x.title:col==='lres'&&x.suggested&&rTitles.has(x.title)?'r:'+x.title:null);
+  const used=(col,x)=>col==='ltopics'?(x.status!=='new'?4:0)+(x.rev?2:0)+((x.app&&x.app.status!=='Not started')?1:0):col==='lpaths'?live(S.ltopics).filter(t=>t.pathId===x.id&&t.status!=='new').length:(x.status!=='To read'?1:0);
+  const remap={lpaths:{},ltopics:{},lres:{}};
+  for(const col of ['lpaths','ltopics','lres']){const groups={};for(const x of live(S[col])){const k=key(col,x);if(k)(groups[k]||(groups[k]=[])).push(x)}
+    for(const g of Object.values(groups)){if(g.length<2)continue;g.sort((a,b)=>used(col,b)-used(col,a)||(String(a.id).startsWith('seed-')?-1:0)-(String(b.id).startsWith('seed-')?-1:0)||String(a.id).localeCompare(String(b.id)));
+      const keep=g[0];for(const x of g.slice(1)){remap[col][x.id]=keep.id;saveDoc(col,x.id,{deleted:true,deletedAt:Date.now(),dupOf:keep.id,updatedAt:Date.now()},{render:false});changed++}}}
+  const P=remap.lpaths,T=remap.ltopics;if(!changed)return 0;
+  for(const t of live(S.ltopics)){const patch={};if(P[t.pathId])patch.pathId=P[t.pathId];const pr=(t.prereqs||[]).map(id=>T[id]||id);if(pr.some((id,i)=>id!==(t.prereqs||[])[i]))patch.prereqs=[...new Set(pr)].filter(id=>id!==t.id);if(Object.keys(patch).length)saveDoc('ltopics',t.id,{...patch,updatedAt:Date.now()},{render:false})}
+  for(const r of live(S.lres)){const ids=(r.topicIds||[]).map(id=>T[id]||id);if(ids.some((id,i)=>id!==r.topicIds[i]))saveDoc('lres',r.id,{topicIds:[...new Set(ids)],updatedAt:Date.now()},{render:false})}
+  for(const s of Object.values(S.lsess||{})){if(!s||!s.date)continue;const patch={};if(T[s.topicId])patch.topicId=T[s.topicId];if(P[s.pathId])patch.pathId=P[s.pathId];if(Object.keys(patch).length)write(`lsess/${s.date.slice(0,7)}`,{items:{[s.id]:patch}},{render:false})}
+  if(S.ui&&P[S.ui.learnPath]){S.ui.learnPath=P[S.ui.learnPath];saveUi()}
+  render();return changed}
 
 
 /* ================= Safety layer =================
@@ -2289,7 +2308,7 @@ SHEETS.import=dr=>{const v=dr.v||{ok:true,notes:[],counts:{}},cs=Object.entries(
 ACT.doImport=async(ds,el)=>{const dr=S.sheet&&S.sheet.draft;if(!dr||!dr.data||(dr.v&&!dr.v.ok))return;
   if(el&&!el.hasAttribute('data-armed')){el.setAttribute('data-armed','');el.textContent='Tap again to replace';setTimeout(()=>{if(el.isConnected){el.removeAttribute('data-armed');el.textContent='Replace'}},4000);return}
   await snapshot('Before replacing with a backup');importData(dr.data);closeSheet();toast('Backup restored. The previous state is kept as a safety copy.')};
-ACT.doMerge=async()=>{const dr=S.sheet&&S.sheet.draft;if(!dr||!dr.data||(dr.v&&!dr.v.ok))return;await snapshot('Before merging a backup');const c=mergeData(dr.data);closeSheet();
+ACT.doMerge=async()=>{const dr=S.sheet&&S.sheet.draft;if(!dr||!dr.data||(dr.v&&!dr.v.ok))return;await snapshot('Before merging a backup');const c=mergeData(dr.data);seedDedupe();closeSheet();
   const parts=Object.entries(c).filter(([,x])=>x.n).map(([k,x])=>`${x.n} ${(COL_LABEL[k]||k).toLowerCase()}`);toast(parts.length?'Merged: '+parts.join(', '):'Already up to date. Nothing new in that backup.')};
 
 /* safety copies + recently deleted */
@@ -2364,6 +2383,125 @@ function inboxAlerts(){const out=[],t=todayISO(),old=inboxOpen().filter(x=>Date.
 ACT.gotoInbox=()=>{S.ui.tab='tasks';saveUi();closeSheetIfOpen();render();window.scrollTo(0,0)};
 
 
+/* ---------------- sync between devices (private GitHub repository, end-to-end encrypted) ---------------- */
+const SYNC_FILE='daybook.sync.json';
+const SYNC={busy:false,keys:new Map(),timer:null};
+const syncCfg=()=>S.meta.sync&&S.meta.sync.token?S.meta.sync:null;
+/* same data → same text, whatever order the keys were written in */
+function canon(v){if(Array.isArray(v))return '['+v.map(canon).join(',')+']';if(v&&typeof v==='object')return '{'+Object.keys(v).sort().filter(k=>v[k]!==undefined).map(k=>JSON.stringify(k)+':'+canon(v[k])).join(',')+'}';return JSON.stringify(v===undefined?null:v)}
+const localSum=()=>sha256hex(canon(DB.cache));
+async function syncKey(pass,salt){const k=pass+'|'+salt;if(!SYNC.keys.has(k))SYNC.keys.set(k,await deriveKey(pass,b64d(salt),310000));return SYNC.keys.get(k)}
+const canGz=()=>typeof CompressionStream!=='undefined'&&typeof DecompressionStream!=='undefined';
+async function gzBytes(s){return new Uint8Array(await new Response(new Blob([new TextEncoder().encode(s)]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer())}
+async function gunzipText(u){return await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).text()}
+async function syncSeal(){const c=syncCfg();if(!c.salt){c.salt=b64e(crypto.getRandomValues(new Uint8Array(16)));saveMeta()}
+  const plain=await buildBackup(),gz=canGz(),bytes=gz?await gzBytes(plain):new TextEncoder().encode(plain),iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},await syncKey(c.pass,c.salt),bytes));
+  return JSON.stringify({app:'daybook-sync',v:1,enc:'AES-GCM-256',kdf:'PBKDF2-SHA256',iter:310000,salt:c.salt,iv:b64e(iv),gz,at:new Date().toISOString(),data:b64e(ct)})}
+async function syncOpen(text,pass){let o;try{o=JSON.parse(text)}catch(e){throw new Error('The synced file on GitHub is damaged. Your data on this device is fine.')}
+  if(o.app!=='daybook-sync')throw new Error('The repository has a file Daybook doesn’t recognise. Use an empty private repository just for Daybook.');
+  let pt;try{pt=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(o.iv)},await syncKey(pass,o.salt),b64d(o.data)))}catch(e){const er=new Error('PASS');er.code='PASS';throw er}
+  if(o.gz&&!canGz())throw new Error('This device’s browser is too old to read the synced data. Update iOS/macOS and try again.');
+  return {inner:JSON.parse(o.gz?await gunzipText(pt):new TextDecoder().decode(pt)),salt:o.salt}}
+async function gh(path,{method='GET',body,raw,token}={}){const c=syncCfg();let r;
+  try{r=await fetch('https://api.github.com'+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+(token||c.token),Accept:raw?'application/vnd.github.raw':'application/vnd.github+json',...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined})}
+  catch(e){throw new Error('Can’t reach GitHub right now. Everything is safe on this device and will sync later.')}
+  return r}
+function ghErr(r){if(r.status===401)return new Error('GitHub no longer accepts the saved token (it may have expired). Turn sync off here and connect again with a new token and the same passphrase.');
+  if(r.status===403||r.status===429)return new Error('GitHub refused for now (no permission or too many requests). It will try again later.');
+  if(r.status===404)return new Error('The repository can’t be found with this token. Check that the token still has access to it.');
+  return new Error('GitHub answered with an error ('+r.status+'). It will try again later.')}
+const ghJson=async r=>{if(!r.ok)throw ghErr(r);return r.json()};
+async function headSha(c){const r=await gh(`/repos/${c.repo}/git/ref/heads/${encodeURIComponent(c.branch)}`);if(r.status===404||r.status===409)return null;return (await ghJson(r)).object.sha}
+/* the repository keeps a single commit holding the latest encrypted copy, so it never grows */
+async function syncPush(c,base){const payload=await syncSeal(),content=btoa(payload);
+  if(!base){const r=await gh(`/repos/${c.repo}/contents/${SYNC_FILE}`,{method:'PUT',body:{message:'Daybook sync',content,branch:c.branch}});
+    if(r.status===201||r.status===200)return true;if(r.status===409||r.status===422)return false;throw ghErr(r)}
+  const blob=await ghJson(await gh(`/repos/${c.repo}/git/blobs`,{method:'POST',body:{content,encoding:'base64'}}));
+  const tree=await ghJson(await gh(`/repos/${c.repo}/git/trees`,{method:'POST',body:{tree:[{path:SYNC_FILE,mode:'100644',type:'blob',sha:blob.sha}]}}));
+  const commit=await ghJson(await gh(`/repos/${c.repo}/git/commits`,{method:'POST',body:{message:'Daybook sync',tree:tree.sha,parents:[]}}));
+  if((await headSha(c))!==base)return false;
+  await ghJson(await gh(`/repos/${c.repo}/git/refs/heads/${encodeURIComponent(c.branch)}`,{method:'PATCH',body:{sha:commit.sha,force:true}}));return true}
+async function syncNow(manual){const c=syncCfg();if(!c)return {ok:false,off:true};if(SYNC.busy)return {ok:false,busy:true};
+  if(!navigator.onLine){if(manual)toast('No internet right now. Daybook will sync when you’re back online.');return {ok:false,offline:true}}
+  SYNC.busy=true;syncRefresh();let got=0;
+  try{await persistNow();
+    for(let attempt=0;;attempt++){
+      const base=await headSha(c);let remote=null;
+      if(base){const r=await gh(`/repos/${c.repo}/contents/${SYNC_FILE}?ref=${base}`,{raw:true});if(r.status===200)remote=await r.text();else if(r.status!==404)throw ghErr(r)}
+      let rSum=null;
+      if(remote){const {inner,salt}=await syncOpen(remote,c.pass);if(c.salt!==salt){c.salt=salt;saveMeta()}
+        const v=await verifyBackup(inner);if(!v.ok)throw new Error(v.notes[0]||'The synced data couldn’t be checked, so nothing was changed.');
+        rSum=await sha256hex(canon(inner.cache||{}));
+        if(rSum!==await localSum()){if(c.snapDay!==todayISO()){await snapshot('Before syncing');c.snapDay=todayISO()}
+          const cnt=mergeData(inner);seedDedupe();got+=sum(Object.values(cnt),x=>x.n)}}
+      const lSum=await localSum();
+      if(lSum===rSum||await syncPush(c,base)){c.sum=lSum;break}
+      if(attempt>=2)throw new Error('Another device was syncing at the same moment. It will try again shortly.')}
+    c.last=Date.now();c.err=null;saveMeta();
+    if(manual)toast(got?`Synced · ${got} change${got>1?'s':''} from your other device`:'Synced · everything matches');
+    return {ok:true,got}}
+  catch(e){if(e.code==='PASS'){c.err='The synced data is locked with a different passphrase than this device uses.';saveMeta();if(manual)toast(c.err,'bad');return {ok:false,pass:true}}
+    c.err=String(e.message||e);saveMeta();if(manual)toast(c.err,'bad');return {ok:false,err:c.err}}
+  finally{SYNC.busy=false;syncRefresh()}}
+function syncRefresh(){if(S.sheet&&S.sheet.kind==='sync')renderSheet();const b=$('[data-act=syncOpen]');if(b)b.outerHTML=syncBtn()}
+const agoMin=t=>{if(!t)return 'never';const m=Math.round((Date.now()-t)/6e4);return m<1?'just now':m<60?m+' min ago':m<1440?Math.round(m/60)+' h ago':Math.round(m/1440)+' days ago'};
+const syncBtn=()=>{const c=syncCfg();return `<button type="button" class="btn sm ${c&&!c.err?'on':''}" data-act="syncOpen">${!c?'Sync devices':SYNC.busy?'Syncing…':c.err?'Sync: needs attention':'Synced '+agoMin(c.last)}</button>`};
+/* automatic: when the app opens, when you come back to it, when you leave it (if something changed), and every 10 minutes */
+async function syncAuto(why){const c=syncCfg();if(!c||SYNC.busy||!navigator.onLine)return;
+  if(why==='leave'){if(c.sum&&c.sum===await localSum())return}
+  else if(why==='back'&&c.last&&Date.now()-c.last<60e3)return;
+  syncNow(false)}
+function syncBoot(){if(!syncCfg())return;setTimeout(()=>syncAuto('open'),1200);clearInterval(SYNC.timer);SYNC.timer=setInterval(()=>{if(document.visibilityState==='visible')syncAuto('tick')},10*60e3)}
+document.addEventListener('visibilitychange',()=>syncAuto(document.visibilityState==='hidden'?'leave':'back'));
+window.addEventListener('online',()=>syncAuto('online'));
+function syncAlerts(){const c=syncCfg();if(!c||!c.err||(c.last&&Date.now()-c.last<2*864e5))return [];
+  return [{kind:'warn',cta:'Open',text:`Sync hasn’t worked ${c.last?'for '+Math.floor((Date.now()-c.last)/864e5)+' days':'yet'}: ${c.err}`,act:'syncOpen'}]}
+const ghLink=(u,t)=>`<a href="${u}" target="_blank" rel="noopener">${t}</a>`;
+SHEETS.sync=dr=>{const c=syncCfg();
+  if(c)return `${head('Sync between devices')}
+  <div class="result syncstat ${c.err?'bad':''}" style="margin-top:0">${c.err?`<b>Needs attention</b><div class="hint" style="margin:4px 0 0">${esc(c.err)}</div>`:`<b>${SYNC.busy?'Syncing now…':'On'}</b><div class="hint" style="margin:4px 0 0">Last synced ${agoMin(c.last)}. Repository: ${esc(c.repo)}</div>`}</div>
+  <p class="hint">Daybook syncs by itself when you open it, when you leave it, and every 10 minutes while it’s open. Nothing is ever removed by a sync: when the same thing changed on both devices, the newer change wins, and deleted items stay in “Recently deleted” for 30 days.</p>
+  <div class="sh-foot"><button type="button" class="btn danger" data-act="syncOff">Turn off on this device</button><span class="spacer"></span><button type="button" class="btn primary" data-act="syncGo" ${SYNC.busy?'disabled':''}>Sync now</button></div>`;
+  return `<form data-form="sync" class="sform">${head('Sync between devices')}${errLine(dr)}
+  <p class="hint" style="margin:0">Keeps this device and your other one in step through a private GitHub repository. Everything is locked with your passphrase before it leaves the device, so GitHub only ever stores scrambled data.</p>
+  <ol class="hint" style="margin:6px 0 0;padding-left:20px;line-height:1.55">
+   <li>${ghLink('https://github.com/new','Create a new private repository')}, for example <b>daybook-data</b>. Leave it empty.</li>
+   <li>${ghLink('https://github.com/settings/personal-access-tokens/new','Make a fine-grained token')}: give it a long expiry, choose <b>Only select repositories → daybook-data</b>, and under Repository permissions set <b>Contents: Read and write</b>.</li>
+   <li>Paste it below. On your other device, use the same repository and the same passphrase.</li></ol>
+  <label class="fld"><span>Repository</span><input class="in" name="repo" placeholder="pastellingo-ops/daybook-data" value="${esc(dr.repo||'')}" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+  <label class="fld"><span>Token</span><input class="in" type="password" name="token" autocomplete="off" placeholder="github_pat_…"></label>
+  <label class="fld"><span>Sync passphrase</span><input class="in" type="password" name="p1" autocomplete="new-password"></label>
+  <label class="fld"><span>Again</span><input class="in" type="password" name="p2" autocomplete="new-password"></label>
+  <div class="err" style="font-weight:500">Write the passphrase down somewhere safe. Without it a new device can’t join the sync (your data stays on each device either way).</div>
+  <div class="sh-foot"><span class="spacer"></span><button type="button" class="btn" data-act="closeSheet">Cancel</button><button class="btn primary" type="submit" ${dr.busy?'disabled':''}>${dr.busy?'Connecting…':'Connect'}</button></div></form>`};
+READ.sync=f=>fd(f);
+SAVE.sync=dr=>{let repo=String(dr.repo||'').trim().replace(/^https?:\/\/github\.com\//i,'').replace(/\.git$/,'').replace(/\/+$/,'');const token=String(dr.token||'').trim();
+  if(!/^[\w.-]+\/[\w.-]+$/.test(repo)){dr.err='Write the repository as owner/name, for example pastellingo-ops/daybook-data.';return false}
+  if(!token){dr.err='Paste the token from GitHub.';return false}
+  if(String(dr.p1||'').length<8){dr.err='Use a passphrase of at least 8 characters.';return false}
+  if(dr.p1!==dr.p2){dr.err='The two passphrases don’t match.';return false}
+  const keep={repo};dr.busy=true;dr.err='';openSheet('sync',{...keep,busy:true});
+  syncConnect(repo,token,dr.p1).then(err=>{if(err){openSheet('sync',{...keep,err});return}openSheet('sync',{});toast('Sync is on')});return 'keep'};
+async function syncConnect(repo,token,pass){let r;
+  try{r=await gh(`/repos/${repo}`,{token})}catch(e){return e.message}
+  if(r.status===401)return 'GitHub didn’t accept this token. Copy it again (it starts with github_pat_).';
+  if(r.status===404||r.status===403)return 'This token can’t see that repository. Check the name, and that the token was given access to it.';
+  if(!r.ok)return 'GitHub answered with an error ('+r.status+'). Try again in a moment.';
+  const j=await r.json();
+  if(!j.private)return 'This repository is public. Make it private on GitHub (Settings → Danger Zone → Change visibility), then connect again.';
+  if(j.permissions&&!j.permissions.push)return 'This token can read the repository but not change it. Edit the token and set Contents to “Read and write”.';
+  S.meta.sync={repo:j.full_name,branch:j.default_branch||'main',token,pass};saveMeta();
+  const res=await syncNow(false);
+  if(res.pass){delete S.meta.sync;saveMeta();return 'This repository already holds Daybook data locked with a different passphrase. Use the same passphrase as on your other device.'}
+  if(!res.ok){const m=S.meta.sync.err;delete S.meta.sync;saveMeta();return m||'The first sync didn’t finish. Try again.'}
+  syncBoot();return null}
+ACT.syncOpen=()=>{S.back=null;openSheet('sync',{})};
+ACT.syncGo=()=>syncNow(true);
+ACT.syncOff=(ds,el)=>{if(!el.hasAttribute('data-armed')){el.setAttribute('data-armed','');el.textContent='Tap again to turn off';setTimeout(()=>{if(el.isConnected){el.removeAttribute('data-armed');el.textContent='Turn off on this device'}},4000);return}
+  delete S.meta.sync;saveMeta();clearInterval(SYNC.timer);closeSheet();toast('Sync is off on this device. Your data here is untouched.')};
+
+
 /* ---------------- toast ---------------- */
 let toastT=null;
 function toast(msg,kind){const t=$('#toast');t.textContent=msg;t.className='toast'+(kind?' '+kind:'');t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{t.hidden=true},kind==='bad'?5000:2400)}
@@ -2374,7 +2512,7 @@ async function boot(){
   await storeInit();
   if(STORE.kind){for(const c of COLS){try{DB.cache[c]=(await storeGet(c))||{}}catch(e){DB.cache[c]={}}rebuild(c)}try{S.meta=(await storeGet('meta'))||{}}catch(e){S.meta={}}S.db='ready'}
   else S.db='off';
-  if(S.db==='ready'){await safetyBoot();finMigrate();learnSeed()}
+  if(S.db==='ready'){await safetyBoot();finMigrate();learnSeed();seedDedupe();syncBoot()}
   render();startPendingFlow();
   if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('offline cache',e));
 }
